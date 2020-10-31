@@ -59,7 +59,7 @@ jobs:
 
       - name: Add Kubernetes Secrets PROD
         if: github.ref == 'refs/heads/master'
-          aenv:
+        env:
           NAMESPACE_FOR_SECRET_01: sorc3r3r_production
           SECRET_NAME_01: sorc3r3r_production_secrets
         run: |
