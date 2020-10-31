@@ -3,7 +3,7 @@ name: Build
 on:
   push:
     branches:
-      - '**'
+      - 'do_not_build_me'
     tags-ignore:
       - '**'
 jobs:
