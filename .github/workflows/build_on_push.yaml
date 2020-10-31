@@ -1,0 +1,40 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - '**'
+    tags-ignore:
+      - '**'
+jobs:
+  build:
+
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set environment variables
+        run: |
+          echo "service_name=gitops"  >> $GITHUB_ENV # set repository/app/service/image name
+      - uses: actions/checkout@v2
+      - name: Build
+        run: docker-compose build --pull
+        env:
+          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_TAG: ${{ github.sha }}
+      - name: Run tests
+        run: docker-compose run $service_name npm run test
+        env:
+          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_TAG: ${{ github.sha }}
+
+      # Only publish and kustomize image tag if on branch master
+      - name: Login to Docker Registry
+        if: github.ref == 'refs/heads/master'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u ${{ github.actor }} --password-stdin
+      - name: Publish to Docker Registry
+        if: github.ref == 'refs/heads/master'
+        run: docker-compose push
+        env:
+          IMAGE_TAG: ${{ github.sha }}

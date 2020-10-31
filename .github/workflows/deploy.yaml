@@ -1,0 +1,86 @@
+name: Publish & Deploy
+### ----------------------------------------------------- ###
+### CONFIGURATION INSTRUCTIONS: See comments in workflow! ###
+### ----------------------------------------------------- ###
+on:
+  push:
+    paths:
+      ### Update following lines according to the repository
+      ### - '<OWNER/ORGANISATION>/<REPOSITORY>/<PATH_TO_K8S_BASE>/**'
+      - 'sorc3r3r/gitops/k8s/**'
+
+jobs:
+  publish:
+    name: Publish & Deploy Docker Image
+
+    runs-on: self-hosted
+
+    env:
+      KUBECONFIG: /root/.kube/config.prod
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set Environment Variables
+        ### Update following lines according to the repository
+        ### Update repository name: service_name=<OWNER/ORGANISATION><REPOSITORY>
+        run: |
+          echo "service_name=sorc3r3r/gitops" >> $GITHUB_ENV
+
+      # Create a pull request
+      - name: pull-request
+        uses: repo-sync/pull-request@v2
+        with:
+          destination_branch: "master"                      # If blank, default: master
+          pr_title: "Pulling ${{ github.ref }} into master" # Title of pull request
+          pr_reviewer: "sorc3r3r"                           # Comma-separated list (no spaces)
+          pr_label: "auto-pr,new-deployment,GitOps"         # Comma-separated list (no spaces)
+          pr_allow_empty: true                              # Creates pull request even if there are no changes
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u ${{ github.actor }} --password-stdin
+
+      - name: Add Kubernetes Secrets Staging
+        if: startsWith(github.ref, 'refs/heads/deploy')
+        env:
+          NAMESPACE_FOR_SECRET_01: sorc3r3r_staging
+          SECRET_NAME_01: sorc3r3r_staging_secrets 
+        run: |
+          # usage: add_k8s_secret "NAMESPACE" "SECRET_NAME" "SECRET_VALUE"
+          add_k8s_secret () {
+            kubectl -n $1 delete secret $2 || true
+            echo "Adding secret to namespace: $1"
+            kubectl -n $1 create secret generic $2 \
+              --from-literal=value="$3"
+          }}
+          add_k8s_secret "$NAMESPACE_FOR_SECRET_01" "$SECRET_NAME_01" "${{secrets.SORC3R3R_STAGING_PASSWORD}}"
+
+      - name: Add Kubernetes Secrets PROD
+        if: github.ref == 'refs/heads/master'
+          aenv:
+          NAMESPACE_FOR_SECRET_01: sorc3r3r_production
+          SECRET_NAME_01: sorc3r3r_production_secrets
+        run: |
+          # usage: add_k8s_secret "NAMESPACE" "SECRET_NAME" "SECRET_VALUE"
+          add_k8s_secret () {
+            kubectl -n $1 delete secret $2 || true
+            echo "Adding secret to namespace: $1"
+            kubectl -n $1 create secret generic $2 \
+              --from-literal=value="$3"
+          }}
+          add_k8s_secret "$NAMESPACE_FOR_SECRET_01" "$SECRET_NAME_01" "${{secrets.SORC3R3R_PRODUCTION_SECRET}}"
+
+      - name: Deploy to Kubernetes QA
+        if: startsWith(github.ref, 'refs/heads/deploy')
+        run: |
+          cd $service_name/k8s
+          kubectl apply -k overlays/staging
+
+      - name: Deploy to Kubernetes PROD
+        if: github.ref == 'refs/heads/master'
+        run: |
+          cd $service_name/k8s
+          kubectl apply -k overlays/production
+
