@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- manifest.yml
+images:
+- name: docker.pkg.github.com/SORC3r3r/nodejs-template/nodejs-template
+  newTag: 3ff58ff64f8b56d352d9c8dea4d4668889f43cce
